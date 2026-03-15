@@ -1,7 +1,7 @@
 ---
-title: "EcoTopic2"
-author: "Sydney Ohr"
-date: "2026-03-05"
+title: 'Ecotopic #2'
+author: "Sydney Ohr
+date: "2026-02-26"
 output: html_document
 ---
 
@@ -9,22 +9,200 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+## Packages
+```{r libraries}
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(auk) # for loading in the ebird data 
+library(janitor)
+library(lubridate)
+library(stringr)
 ```
 
-## Including Plots
+## Loading in data
+```{r load-data}
+# eBird data for the Canadian Goose in Calgary, AB and Sante Fe, NM
+calgary_ebird <- read_ebd("ebd_CA-AB-SI_cangoo_smp_relJan-2026/ebd_CA-AB-SI_cangoo_smp_relJan-2026.txt")
+calgary_sampling <- read_sampling("ebd_CA-AB-SI_cangoo_smp_relJan-2026/ebd_CA-AB-SI_cangoo_smp_relJan-2026_sampling.txt")
 
-You can also embed plots, for example:
+santafe_ebird <- read_ebd("ebd_US-NM-049_cangoo_smp_relJan-2026/ebd_US-NM-049_cangoo_smp_relJan-2026.txt")
+santafe_sampling <- read_sampling("ebd_US-NM-049_cangoo_smp_relJan-2026/ebd_US-NM-049_cangoo_smp_relJan-2026_sampling.txt")
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+# minimum and maximum temperatures at stations in Calgary, AB, CA and Santa Fe, NM, USA
+calgary_temps <- read_csv("Data/temperature_data/calgary_temps.csv")
+santafe_temps <- read.csv("Data/temperature_data/santafe_temps.csv")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+# Data wrangling
+```{r temperature}
+
+## standardize all columns as lowercase 
+calgary_temps <- calgary_temps %>%
+  mutate(DATE = as.Date(DATE)) %>%
+  janitor::clean_names() 
+
+santafe_temps <- santafe_temps %>%
+  mutate(DATE = as.Date(DATE)) %>% # reads in as a data instead of a character
+  janitor::clean_names() 
+
+## Adding a column (using mutate) for median and range
+## Filtering for the date ranges that correspond to the eBird data
+## Adding a column for just the year
+
+santafe_temps <- santafe_temps %>%
+  mutate(median_temp = (tmax+tmin)/2) %>%
+  mutate(year = year(date)) %>%
+  filter(!is.na(tmin) & !is.na(tmax)) %>%
+  filter(year %in% 2001:2025)
+
+calgary_temps <-calgary_temps %>%
+  mutate(median_temp = (tmax+tmin)/2) %>%
+  mutate(year = year(date)) %>%
+  filter(!is.na(tmin) & !is.na(tmax)) %>%
+  filter(year %in% 2001:2025)
+
+```
+
+
+```{r ebird}
+
+# eBird data
+## Filtering observation_date for the date range of 2001-2025
+
+calgary_sampling <- calgary_sampling %>%
+  filter(year(observation_date) %in% 2001:2025) %>%
+  arrange(observation_date) %>%
+  mutate(day = yday(observation_date)) # get the day of the year 
+
+santafe_sampling <- santafe_sampling %>%
+  filter(year(observation_date) %in% 2001:2025) %>%
+  arrange(observation_date) %>% # arrange by first day of the year
+  mutate(day = yday(observation_date)) # get the day of the year 
+
+
+```
+
+
+```{r ebird-plots}
+
+# -------------- observation count -------------- 
+full_sampling <- rbind(calgary_sampling, santafe_sampling) 
+
+full_sampling %>%
+  filter(year(observation_date) %in% c(2002, 2007, 2013, 2019, 2025)) %>%
+  mutate(week = week(observation_date)) %>%
+  mutate(year = year(observation_date)) %>%
+  filter(week >= 35 & week <=52) %>%
+  group_by(week,year, county) %>%
+  summarise(observation_count = n()) %>%
+  ggplot(aes(x = week, y = observation_count, color = county)) +
+  geom_line() +
+  facet_grid(~year) +
+  labs(x = "Week", 
+       y = "Observation Count", 
+       color = "Location",
+       title = "Weekly Observation Count in Calgary and Santa Fe") +
+  theme_linedraw()
+
+# -------------- Calgary percent change -------------- 
+
+# difference for weeks 35-52
+calgary_difference <- calgary_sampling %>%
+  mutate(week = week(observation_date)) %>%
+  mutate(year = year(observation_date)) %>%
+  group_by(week,year, county_code) %>%
+  summarise(observation_count = n()) %>%
+  arrange(year) %>%
+  ungroup() %>%
+  mutate(observation_difference = observation_count - lag(observation_count)) %>%
+  mutate(percent_change = ((observation_count - lag(observation_count))/observation_count) * 100) %>%
+  filter(week %in% 35:52)
+
+calgary_difference %>%
+  filter(year %in% c(2002, 2007, 2013, 2019, 2025)) %>%
+  ggplot(aes(x = week, y = percent_increase)) +
+  geom_line(aes(color = as.character(year))) + 
+  facet_grid(~year) +
+  labs(title = "Percent Change in Weekly Sitings in Calgary, AB", 
+       color = "Year",
+       x = "Week",
+       y = "Percent Change in Observations") +
+  theme_linedraw() +
+  theme(legend.position = "none")
+
+# -------------- santa fe percent change -------------- 
+
+# difference for weeks 35-52
+santafe_difference <- santafe_sampling %>%
+  mutate(week = week(observation_date)) %>%
+  mutate(year = year(observation_date)) %>%
+  group_by(week,year, county_code) %>%
+  summarise(observation_count = n()) %>%
+  arrange(year) %>%
+  ungroup() %>%
+  mutate(observation_difference = observation_count - lag(observation_count)) %>%
+  mutate(percent_change = ((observation_count - lag(observation_count))/observation_count) * 100) %>% # calculate percent change
+  filter(week %in% 35:52)
+
+santafe_difference %>%
+  filter(year %in% c(2002, 2007, 2013, 2019, 2025)) %>%
+  ggplot(aes(x = week, y = percent_increase, fill = as.character(year))) +
+  geom_line(aes(color = as.character(year))) + 
+  facet_grid(~year) +
+  labs(title = "Percent Change in Weekly Sitings in Santa Fe, NM", 
+       color = "Year",
+       x = "Week",
+       y = "Percent Change in Observations") +
+  theme_linedraw() +
+    theme(legend.position = "none")
+
+```
+
+```{r temperature-plot}
+
+santafe_over_time <- santafe_temps %>% 
+  mutate(week = week(date)) %>%
+  group_by(week, year) %>%
+  summarise(median_temp = median(median_temp))
+
+temperature_over_time <- rbind(santafe_temps, calgary_temps)
+
+temperature_over_time_cleaned <- temperature_over_time %>% 
+  mutate(week = week(date)) %>%
+  mutate(week_year = strftime(date, format = "%G-%V")) %>%
+  mutate(month = month(date)) %>%
+  mutate(state = if_else(station =="USW00023049", "New Mexico", "Alberta")) %>%
+  group_by(state, month, year) %>%
+  summarise(median_min_temp = median(tmin)) 
+
+
+temperature_over_time_cleaned %>%
+  filter(month %in% 7:12) %>%
+  ggplot(aes(x = year, y = median_min_temp, fill = state)) +
+  geom_point(aes(color = state)) +
+  geom_smooth(se = FALSE) +
+  facet_wrap(~month) +
+  theme_linedraw()
+```
+
+
+dw about this
+```{r}
+# full_sampling_cleaned <- full_sampling %>%
+#   mutate(week = week(observation_date)) %>%
+#   mutate(year = year(observation_date)) %>%
+#   mutate(week_year = strftime(observation_date, format = "%G-%V")) %>%
+#   group_by(week_year, state) %>%
+#   summarise(observation_count = n())
+# 
+# 
+# joined_temp_obs <- inner_join(full_sampling_cleaned, temperature_over_time_cleaned)
+```
+
+
+
+
+
