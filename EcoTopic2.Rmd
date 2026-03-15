@@ -161,33 +161,6 @@ santafe_difference %>%
 
 ```
 
-```{r temperature-plot}
-
-santafe_over_time <- santafe_temps %>% 
-  mutate(week = week(date)) %>%
-  group_by(week, year) %>%
-  summarise(median_temp = median(median_temp))
-
-temperature_over_time <- rbind(santafe_temps, calgary_temps)
-
-temperature_over_time_cleaned <- temperature_over_time %>% 
-  mutate(week = week(date)) %>%
-  mutate(week_year = strftime(date, format = "%G-%V")) %>%
-  mutate(month = month(date)) %>%
-  mutate(state = if_else(station =="USW00023049", "New Mexico", "Alberta")) %>%
-  group_by(state, month, year) %>%
-  summarise(median_min_temp = median(tmin)) 
-
-
-temperature_over_time_cleaned %>%
-  filter(month %in% 7:12) %>%
-  ggplot(aes(x = year, y = median_min_temp, fill = state)) +
-  geom_point(aes(color = state)) +
-  geom_smooth(se = FALSE) +
-  facet_wrap(~month) +
-  theme_linedraw()
-```
-
 
 dw about this
 ```{r}
@@ -200,6 +173,30 @@ dw about this
 # 
 # 
 # joined_temp_obs <- inner_join(full_sampling_cleaned, temperature_over_time_cleaned)
+
+# santafe_over_time <- santafe_temps %>% 
+#   mutate(week = week(date)) %>%
+#   group_by(week, year) %>%
+#   summarise(median_temp = median(median_temp))
+# 
+# temperature_over_time <- rbind(santafe_temps, calgary_temps)
+# 
+# temperature_over_time_cleaned <- temperature_over_time %>% 
+#   mutate(week = week(date)) %>%
+#   mutate(week_year = strftime(date, format = "%G-%V")) %>%
+#   mutate(month = month(date)) %>%
+#   mutate(state = if_else(station =="USW00023049", "New Mexico", "Alberta")) %>%
+#   group_by(state, month, year) %>%
+#   summarise(median_min_temp = median(tmin)) 
+# 
+# 
+# temperature_over_time_cleaned %>%
+#   filter(month %in% 7:12) %>%
+#   ggplot(aes(x = year, y = median_min_temp, fill = state)) +
+#   geom_point(aes(color = state)) +
+#   geom_smooth(se = FALSE) +
+#   facet_wrap(~month) +
+#   theme_linedraw()
 ```
 
 
