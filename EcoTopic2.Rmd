@@ -1,6 +1,6 @@
 ---
 title: 'Ecotopic #2'
-author: "Sydney Ohr
+author: "Sydney Ohr"
 date: "2026-02-26"
 output: html_document
 ---
